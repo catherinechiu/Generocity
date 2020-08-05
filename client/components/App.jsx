@@ -163,7 +163,7 @@ class App extends Component {
   }
 
   /*----------------POST request To SIGNUP-------------------*/
-  handleSignUpSubmit(e) {
+  async handleSignUpSubmit(e) {
     e.preventDefault();
 
     const {
@@ -178,84 +178,69 @@ class App extends Component {
     } = this.state;
 
     // Query Google Maps Geocode API for latitude & longitude
-    // variable that stores url to fetch lat & long from user inputed address
-    let geocodeURL = `https://maps.googleapis.com/maps/api/geocode/json`
+    const geocodeURL = `https://maps.googleapis.com/maps/api/geocode/json`
+    // let location = '22 Main St Boston MA'
+    const location = `${street} ${city} ${state}`
 
-    let geocodeLatitude;
-    let geocodeLongitude;
-
-    // MUST use arrow function here, or else when we setState in nested async function
-    // 'this' will be undefined
-    const geocode = () => {
-      // let location = '22 Main St Boston MA'
-      let location = `${street} ${city} ${state}}`
-      axios.get(geocodeURL, {
+    try {
+      // Await response from get request to Google API
+      const { data } = await axios.get(geocodeURL, {
         params: {
           address: location,
           key: process.env.GOOGLE_API_KEY,
         }
-      })
-        .then((res) => {
-          console.log('response from Geocode API', res);
-          geocodeLatitude = res.data.results[0].geometry.location.lat
-          geocodeLongitude = res.data.results[0].geometry.location.lng
-          console.log('lat & long', geocodeLatitude, geocodeLongitude);
+      });
+      // console.log('response from Geocode API', data);
 
+      // A few different pieces of syntax for destructuring data from response
+      const [geoData] = data.results;
+      const { lat, lng} = geoData.geometry.location;
+      // console.log('lat & long', lat, lng);
 
-          // Request body for POST request to sign up user
-          const body = {
-            email,
-            password,
-            firstName,
-            lastName,
-            zipCode,
-            street,
-            city,
-            state,
-            latitude: geocodeLatitude,
-            longitude: geocodeLongitude,
-          };
+      // Request body for POST request to sign up user
+      const body = {
+        email,
+        password,
+        firstName,
+        lastName,
+        zipCode,
+        street,
+        city,
+        state,
+        latitude: lat,
+        longitude: lng,
+      };
 
-          // POST request to backend to add user info to db
-          fetch('/user/signup', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'Application/JSON',
-            },
-            body: JSON.stringify(body),
-          })
-            .then((res) => res.json())
-            // TODO: setState with isLoggedIn, clear pw
-            // return to home page
-            .then((res) => {
-              console.log('res', res)
-              console.log('res.user_id', res.user_id)
-              // set state with new values for user_id and toggle isLoggedIn to true
-              console.log('this', this);
-              this.setState({
-                user_id: res.user_id,
-                isloggedIn: true,
-              })
-              console.log('new user_id after setting state', this.state.user_id);
-              // this.props.history.push('/');
-              redirect();
-            })
-            .catch((err) => {
-              console.log('AddItem Post error: ', err);
-            });
-        })
-        .catch((err) => {
-          console.log('Error from Geocode function in HandleSignUpSubmit in App.jsx', err);
-        })
+      // POST request to backend to add user info to db
+      const response = await fetch('/user/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'Application/JSON',
+        },
+        body: JSON.stringify(body),
+      });
+      // Convert POST response to JSON & get user_id
+      const { user_id } = await response.json()
+      // console.log('signup.user_id', signup.user_id)
+
+      // console.log('this', this);
+      // set state with new values for user_id and toggle isLoggedIn to true
+      this.setState({
+        user_id,
+        isloggedIn: true,
+      }, () => {
+        // console.log('new user_id after setting state', this.state.user_id);
+        /**
+         * redirect user to homepage after state has been set
+         * handled with callback b/c setState does not return an await-able object / Promise
+         * arrow callback should be bound to contextual "this" at time of definition
+         */
+        this.props.history.push('/');
+      });
+    } catch (err) {
+      // catch any async errors during function execution
+        console.log('Error from Geocode function in HandleSignUpSubmit in App.jsx', err);
     }
-
-    // call geocode() to get lat & long of user who signed up
-    geocode();
-
-    // storing invocation of this.props.history.push('/') so that this.props is accessible
-    // within the nested async POST to '/user/signup'
-    let redirect = () => this.props.history.push('/')
-
   }
 
   /*----------------Geolocation-------------------*/
